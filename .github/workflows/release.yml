@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            platform: win32
+            arch: x64
+            asset: rdc-persistente-windows-x64.zip
+          - runner: windows-11-arm
+            platform: win32
+            arch: arm64
+            asset: rdc-persistente-windows-arm64.zip
+          - runner: macos-latest
+            platform: darwin
+            arch: arm64
+            asset: rdc-persistente-macos-arm64.tar.gz
+          - runner: macos-15-intel
+            platform: darwin
+            arch: x64
+            asset: rdc-persistente-macos-x64.tar.gz
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run check
+      - name: Build self-contained artifact
+        run: node scripts/build-dist.js --platform=${{ matrix.platform }} --arch=${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}-${{ matrix.arch }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  chocolatey:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: npm
+      - run: npm ci
+      - run: npm run dist:choco
+      - name: Pack Chocolatey package
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path dist\chocolatey\package -Force | Out-Null
+          choco pack dist\chocolatey\source\rdc-persistente.nuspec --outputdirectory dist\chocolatey\package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-chocolatey
+          path: dist/chocolatey/package/*.nupkg
+          if-no-files-found: error
+
+  publish:
+    needs: [build, chocolatey]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Generate SHA256SUMS
+        shell: bash
+        run: |
+          cd release-assets
+          sha256sum rdc-persistente-* > SHA256SUMS
+          cat SHA256SUMS
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" release-assets/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" release-assets/* \
+              --title "RDC Persistente $GITHUB_REF_NAME" --generate-notes
+          fi

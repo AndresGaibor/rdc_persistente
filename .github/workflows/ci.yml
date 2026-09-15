@@ -6,11 +6,37 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24.21.0
+          cache: npm
+      - run: npm ci
       - run: npm test
       - run: npm run check
+      - name: Validate PowerShell syntax
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $files = @(
+            'install.ps1', 'uninstall.ps1', 'status.ps1',
+            'packaging/chocolatey/tools/chocolateyInstall.ps1',
+            'packaging/chocolatey/tools/chocolateyUninstall.ps1'
+          )
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $file), [ref]$tokens, [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              exit 1
+            }
+          }

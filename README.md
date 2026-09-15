@@ -1,81 +1,126 @@
-# RDC Persistente para macOS
+# RDC Persistente
 
-Supervisor en JavaScript/Node.js para mantener Desktop Commander Remote disponible en macOS mediante `launchd`.
+Supervisor multiplataforma en JavaScript/Node.js para mantener **Desktop Commander Remote** disponible después de cierres, reinicios del proceso y nuevos inicios de sesión.
 
-## Qué resuelve
+- **Windows:** Task Scheduler bajo el usuario interactivo.
+- **macOS:** `launchd` mediante `LaunchAgent`.
+- Watchdog cada 60 segundos.
+- Estado atómico, logs rotativos y filtrado de tokens/payloads sensibles.
+- Desktop Commander fijado en `0.2.47`.
+- Releases autocontenidos con Node.js `24.21.0` y npm `11.19.0`.
 
-- Inicia Desktop Commander Remote al iniciar sesión.
-- `KeepAlive` vuelve a levantar el proceso si termina.
-- Un watchdog revisa el servicio cada 60 segundos.
-- Detecta arranques estancados, autenticación expirada y fallos del proceso.
-- Tolera errores de almacenamiento como `ENOSPC` sin derribar RDC.
-- Filtra payloads de tool calls y códigos de autenticación de los logs.
-- Rota logs para evitar crecimiento indefinido.
-- No contiene tokens, correos, rutas de usuario ni credenciales embebidas.
+## Windows: instalación directa
 
-## Requisitos
+El usuario final **no necesita instalar Node.js ni npm**. El ZIP del release ya contiene ambos.
 
-- macOS.
-- Node.js 22 o superior.
-- `npm` disponible si Desktop Commander todavía no está instalado localmente.
+Abre PowerShell con **Run PowerShell as Administrator** y ejecuta:
 
-Desktop Commander queda fijado actualmente a la versión `0.2.47`.
-
-## Desarrollo
-
-```bash
-npm test
-npm run check
-```
-## Instalación
-
-Preparar archivos sin activar servicios:
-
-```bash
-npm run stage
+```powershell
+irm https://raw.githubusercontent.com/AndresGaibor/rdc_persistente/main/install.ps1 | iex
 ```
 
-Instalar y activar los dos `LaunchAgent`:
+El instalador descarga el release correspondiente a `x64` o `arm64`, verifica `SHA256SUMS`, instala en `%LOCALAPPDATA%\RdcPersistente` y registra las tareas `RdcPersistente\Remote` y `RdcPersistente\Watchdog`.
+## Windows: Chocolatey
+
+Chocolatey es opcional. Si todavía no lo tienes:
+
+```powershell
+powershell -c "irm https://community.chocolatey.org/install.ps1|iex"
+```
+
+Cuando el paquete esté publicado en Chocolatey Community:
+
+```powershell
+choco install rdc-persistente -y
+```
+
+También puedes descargar `rdc-persistente.0.2.0.nupkg` desde GitHub Releases e instalarlo localmente:
+
+```powershell
+choco install rdc-persistente --version 0.2.0 --source . -y
+```
+
+Para consultar el estado o desinstalar:
+
+```powershell
+.\status.ps1
+.\uninstall.ps1
+```
+## macOS
+
+Para instalar desde el repositorio:
 
 ```bash
+git clone https://github.com/AndresGaibor/rdc_persistente.git
+cd rdc_persistente
+npm ci
 npm run install:local
 ```
 
-El runtime se instala en `~/.local/share/rdc-macos-supervisor/` y el estado en `~/.local/state/rdc-macos-supervisor/`.
+El instalador usa `launchd`, activa `RunAtLoad` + `KeepAlive` para RDC y un watchdog cada 60 segundos. El estado se guarda en `~/.local/state/rdc-persistente`.
 
-## Migrar un supervisor anterior
+Comandos útiles:
 
-Si ya existen otros labels de `launchd`, indícalos al activar. Los nuevos servicios se levantan primero y después se deshabilitan los labels indicados:
+```bash
+npm run status
+npm run uninstall:local
+```
+
+Para migrar labels antiguos de `launchd` sin borrar sus archivos:
 
 ```bash
 RDC_REPLACE_LABELS='label.remote.anterior,label.watchdog.anterior' npm run install:local
 ```
 
-No se eliminan archivos del supervisor anterior; solo se deshabilitan sus servicios en `launchd`.
-## Estado y diagnóstico
+## Desarrollo
+Para desarrollo puedes instalar exactamente Node.js 24.21.0 con Chocolatey:
 
-```bash
-npm run status
+```powershell
+choco install nodejs --version="24.21.0" -y
+node -v   # v24.21.0
+npm -v    # 11.19.0
 ```
 
-Para inspeccionar también labels externos:
+Después:
 
 ```bash
-RDC_STATUS_LABELS='label.uno,label.dos' npm run status
+npm ci
+npm test
+npm run check
+npm run stage
+npm run dist -- --platform=darwin --arch=arm64
+npm run dist:choco
 ```
 
-Los logs administrados por el supervisor son `remote.log` y `watchdog.log`; se rotan automáticamente y no dependen del stdout ilimitado de `launchd`.
+`npm run stage` prepara archivos sin activar persistencia. `npm run install:local` sí registra y activa el mecanismo nativo del sistema operativo.
 
+## Releases
+
+Los tags `v*` generan automáticamente:
+
+- `rdc-persistente-windows-x64.zip`
+- `rdc-persistente-windows-arm64.zip`
+- `rdc-persistente-macos-arm64.tar.gz`
+- `rdc-persistente-macos-x64.tar.gz`
+- `rdc-persistente.<version>.nupkg`
+- `SHA256SUMS`
 ## Arquitectura
 
-- `bin/remote.js`: ejecuta Desktop Commander Remote con sesión persistente.
-- `bin/watchdog.js`: evalúa salud y ejecuta `launchctl kickstart -k` cuando hace falta.
-- `src/parser.js`: interpreta eventos de arranque, autenticación y disponibilidad.
-- `src/state.js`: estado local atómico con protección frente a claves sensibles.
-- `src/logger.js`: logging filtrado, tolerante a fallos y con rotación.
-- `src/launchd.js`: genera los `plist` portables.
-- `scripts/install.js`: staging, runtime y activación.
+- `bin/remote.js`: ejecuta Desktop Commander con `remote --persist-session`.
+- `bin/watchdog.js`: aplica la política de salud y reinicio.
+- `src/platform/macos/`: `launchd`, lifecycle y paths macOS.
+- `src/platform/windows/`: Task Scheduler, lifecycle y paths Windows.
+- `src/state.js`: estado local atómico.
+- `src/logger.js`: filtrado y rotación de logs.
+- `scripts/build-dist.js`: crea bundles autocontenidos con Node y Desktop Commander.
+- `packaging/chocolatey/`: metadata y hooks del paquete Chocolatey.
 
-## Seguridad
+## Seguridad y datos locales
 
-El repositorio no almacena la sesión persistida de Desktop Commander. Esa sesión sigue siendo gestionada por el propio runtime en el equipo local. Los tokens OAuth detectados en salida se redactan y los códigos temporales no se escriben en los logs del supervisor.
+La sesión persistente de Desktop Commander continúa siendo gestionada por Desktop Commander en el equipo local; no se incluye en Git ni en los releases. Los tokens OAuth detectados en la salida se redactan y los códigos temporales de autenticación no se guardan en los logs del supervisor.
+
+La desinstalación elimina únicamente tareas/LaunchAgents y rutas propiedad de RDC Persistente. No intenta borrar datos externos de la cuenta de Desktop Commander.
+
+## Licencia
+
+MIT.
