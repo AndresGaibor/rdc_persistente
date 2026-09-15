@@ -18,6 +18,7 @@ test('release builds four native platform architectures and publishes checksums'
   const release = await read('.github/workflows/release.yml');
   for (const label of ['windows-latest', 'windows-11-arm', 'macos-latest', 'macos-15-intel']) assert.match(release, new RegExp(label));
   assert.match(release, /SHA256SUMS/);
+  assert.match(release, /sha256sum rdc-persistente\*/);
   assert.match(release, /choco pack/);
   assert.match(release, /gh release/);
   assert.match(release, /--repo \"\$GITHUB_REPOSITORY\"/);
