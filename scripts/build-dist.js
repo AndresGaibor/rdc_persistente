@@ -3,7 +3,7 @@ import { cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { NODE_VERSION, nodeAssetFor, parseSha256Manifest, verifySha256, sha256File } from '../src/release/node-runtime.js';
+import { NODE_VERSION, nodeAssetFor, npmInstallCommand, parseSha256Manifest, verifySha256, sha256File } from '../src/release/node-runtime.js';
 import { releaseArtifactName } from '../src/release/archive.js';
 
 const DC_VERSION = '0.2.47';
@@ -45,8 +45,9 @@ if (platform === 'win32') {
 const runtimeDir = path.join(bundle, 'runtime');
 await mkdir(runtimeDir, { recursive: true });
 await writeFile(path.join(runtimeDir, 'package.json'), JSON.stringify({ private: true }, null, 2));
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-execFileSync(npm, ['install', '--prefix', runtimeDir, `@wonderwhy-er/desktop-commander@${DC_VERSION}`, '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund'], {
+const npmArgs = ['install', '--prefix', runtimeDir, `@wonderwhy-er/desktop-commander@${DC_VERSION}`, '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund'];
+const npmCommand = npmInstallCommand(process.platform, npmArgs);
+execFileSync(npmCommand.file, npmCommand.args, {
   stdio: 'inherit',
   windowsHide: true,
   env: { ...process.env, npm_config_cpu: arch, npm_config_os: platform }

@@ -34,3 +34,14 @@ test('names release artifacts consistently', async () => {
   assert.equal(releaseArtifactName({ platform: 'win32', arch: 'x64' }), 'rdc-persistente-windows-x64.zip');
   assert.equal(releaseArtifactName({ platform: 'win32', arch: 'arm64' }), 'rdc-persistente-windows-arm64.zip');
 });
+test('selects a Windows-safe npm invocation', async () => {
+  const { npmInstallCommand } = await import('../src/release/node-runtime.js');
+  const win = npmInstallCommand('win32', ['install', '--prefix', 'C:\\Program Files\\Rdc']);
+  assert.equal(win.file.toLowerCase(), 'cmd.exe');
+  assert.deepEqual(win.args.slice(0, 4), ['/d', '/s', '/c', 'npm.cmd']);
+  assert.deepEqual(win.args.slice(4), ['install', '--prefix', 'C:\\Program Files\\Rdc']);
+
+  const mac = npmInstallCommand('darwin', ['install', '--prefix', '/tmp/rdc']);
+  assert.equal(mac.file, 'npm');
+  assert.deepEqual(mac.args, ['install', '--prefix', '/tmp/rdc']);
+});

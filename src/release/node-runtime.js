@@ -3,6 +3,11 @@ import { createHash } from 'node:crypto';
 
 export const NODE_VERSION = '24.21.0';
 
+export function npmInstallCommand(platform, args) {
+  if (platform === 'win32') return { file: 'cmd.exe', args: ['/d', '/s', '/c', 'npm.cmd', ...args] };
+  return { file: 'npm', args };
+}
+
 export function nodeAssetFor({ platform, arch, version = NODE_VERSION }) {
   if (platform === 'darwin' && ['x64', 'arm64'].includes(arch)) return `node-v${version}-darwin-${arch}.tar.gz`;
   if (platform === 'win32' && ['x64', 'arm64'].includes(arch)) return `node-v${version}-win-${arch}.zip`;
