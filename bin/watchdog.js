@@ -6,30 +6,39 @@ import path from 'node:path';
 import { FileStateStore } from '../src/state.js';
 import { evaluateSupervisor } from '../src/watchdog-policy.js';
 import { RotatingLogger } from '../src/logger.js';
+import { buildPlatformPaths } from '../src/platform/paths.js';
+import { buildRemoteServiceCommands, serviceOutputIsRunning } from '../src/platform/service-control.js';
 
 const exec = promisify(execFile);
-const home = process.env.HOME || homedir();
-const state = new FileStateStore(process.env.RDC_STATE_DIR || path.join(home, '.local/state/rdc-macos-supervisor'));
+const home = process.env.HOME || process.env.USERPROFILE || homedir();
+const paths = buildPlatformPaths({ platform: process.platform, home, localAppData: process.env.LOCALAPPDATA });
+const state = new FileStateStore(process.env.RDC_STATE_DIR || paths.stateDir);
 const logger = new RotatingLogger(path.join(state.dir, 'watchdog.log'), { maxBytes: 1024 * 1024, backups: 2 });
-const label = 'dev.rdc.macos-supervisor.remote';
-const domain = `gui/${process.getuid()}`;
+const commands = buildRemoteServiceCommands({
+  platform: process.platform,
+  uid: process.platform === 'darwin' ? process.getuid() : undefined
+});
+
+async function execute(command) {
+  const [file, ...args] = command;
+  return exec(file, args, { windowsHide: true });
+}
 
 async function isRunning() {
   try {
-    const { stdout } = await exec('/bin/launchctl', ['print', `${domain}/${label}`]);
-    return /state = running/.test(stdout);
+    const { stdout } = await execute(commands.query);
+    return serviceOutputIsRunning(process.platform, stdout);
   } catch { return false; }
 }
-
 async function readNumber(key, fallback) {
   const value = Number(await state.get(key));
   return Number.isFinite(value) ? value : fallback;
 }
+
 const now = Math.floor(Date.now() / 1000);
-const status = await state.get('status');
 const decision = evaluateSupervisor({
   agentRunning: await isRunning(),
-  status,
+  status: await state.get('status'),
   now,
   startedAt: await readNumber('started_at', now),
   authStartedAt: await readNumber('auth_started_at', now),
@@ -49,6 +58,6 @@ if (decision.action === 'restart') {
     await state.set('degraded_reason', decision.reason);
   } catch {}
   await logger.log(`restart reason=${decision.reason} count=${current + 1}`);
-  try { await exec('/bin/launchctl', ['kickstart', '-k', `${domain}/${label}`]); }
-  catch (error) { await logger.log(`kickstart_error ${error.message}`); }
+  try { await execute(commands.restart); }
+  catch (error) { await logger.log(`restart_error ${error.message}`); }
 }

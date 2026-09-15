@@ -7,42 +7,50 @@ import { FileStateStore, sanitizeLine } from '../src/state.js';
 import { parseDesktopCommanderLine } from '../src/parser.js';
 import { RotatingLogger, shouldLogRemoteLine } from '../src/logger.js';
 import { createLineReader, resolveDesktopCommanderEntry } from '../src/remote-utils.js';
+import { buildPlatformPaths } from '../src/platform/paths.js';
 
-const home = process.env.HOME || homedir();
-const stateDir = process.env.RDC_STATE_DIR || path.join(home, '.local/state/rdc-macos-supervisor');
+const home = process.env.HOME || process.env.USERPROFILE || homedir();
+const paths = buildPlatformPaths({
+  platform: process.platform,
+  home,
+  localAppData: process.env.LOCALAPPDATA
+});
+const stateDir = process.env.RDC_STATE_DIR || paths.stateDir;
 const state = new FileStateStore(stateDir);
 const logger = new RotatingLogger(path.join(stateDir, 'remote.log'));
-const roots = [
-  process.env.RDC_RUNTIME_DIR,
-  path.join(home, '.local/share/rdc-macos-supervisor/runtime'),
-  path.join(home, '.local/share/desktop-commander-runtime-macos')
-].filter(Boolean);
+const roots = [process.env.RDC_RUNTIME_DIR, paths.runtimeDir];
+if (process.platform === 'darwin') {
+  roots.push(path.join(home, '.local/share/desktop-commander-runtime-macos'));
+}
 
 async function findEntry() {
-  for (const root of roots) {
+  for (const root of roots.filter(Boolean)) {
     const entry = resolveDesktopCommanderEntry(root);
     try { await access(entry); return entry; } catch {}
   }
-  throw new Error('Desktop Commander runtime not found. Run: npm run install:local');
+  throw new Error('Desktop Commander runtime not found. Run the installer again.');
 }
 async function safeState(key, value) {
-  try { await state.set(key, value); } catch (error) {
+  try { await state.set(key, value); }
+  catch (error) {
     if (!['ENOSPC', 'EDQUOT', 'EROFS', 'EACCES'].includes(error?.code)) throw error;
   }
 }
 
 async function handleLine(raw) {
   const line = sanitizeLine(raw);
-  try { await parseDesktopCommanderLine(line, state); } catch (error) {
-    await logger.log(`parser_error ${error?.message || error}`);
-  }
+  try { await parseDesktopCommanderLine(line, state); }
+  catch (error) { await logger.log(`parser_error ${error?.message || error}`); }
   if (shouldLogRemoteLine(line)) await logger.log(line);
 }
 
 const entry = await findEntry();
 await safeState('status', 'starting');
 await safeState('started_at', Math.floor(Date.now() / 1000));
-const child = spawn(process.execPath, [entry, 'remote', '--persist-session'], { stdio: ['ignore', 'pipe', 'pipe'] });
+const child = spawn(process.execPath, [entry, 'remote', '--persist-session'], {
+  stdio: ['ignore', 'pipe', 'pipe'],
+  windowsHide: true
+});
 const stdout = createLineReader(handleLine);
 const stderr = createLineReader((line) => handleLine(`stderr: ${line}`));
 child.stdout.on('data', (chunk) => stdout.push(chunk));

@@ -1,13 +1,11 @@
 #!/usr/bin/env node
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { rm } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { buildInstallPlan } from '../src/install-plan.js';
 import { buildMacOSLifecycle } from '../src/platform/macos/installer.js';
 import { buildWindowsLifecycle } from '../src/platform/windows/installer.js';
-import { FileStateStore } from '../src/state.js';
 
-const exec = promisify(execFile);
 const platform = process.platform;
 if (!['darwin', 'win32'].includes(platform)) throw new Error(`Unsupported platform: ${platform}`);
 const home = process.env.HOME || process.env.USERPROFILE || homedir();
@@ -15,15 +13,14 @@ const plan = buildInstallPlan({ platform, home, localAppData: process.env.LOCALA
 const lifecycle = platform === 'darwin'
   ? buildMacOSLifecycle({ uid: process.getuid(), plan })
   : buildWindowsLifecycle({ nodePath: process.execPath, appDir: plan.appDir });
-const state = new FileStateStore(plan.stateDir);
 
-for (const command of lifecycle.status) {
-  const [file, ...args] = command;
-  try {
-    const { stdout } = await exec(file, args, { windowsHide: true });
-    console.log(JSON.stringify({ service: args.join(' '), loaded: true, output: stdout.trim() }));
-  } catch (error) {
-    console.log(JSON.stringify({ service: args.join(' '), loaded: false, error: error.code || 'not-found' }));
-  }
+for (const [file, ...args] of lifecycle.uninstall) {
+  try { execFileSync(file, args, { stdio: 'ignore', windowsHide: true }); } catch {}
 }
-console.log(JSON.stringify({ supervisorState: await state.get('status'), lastError: await state.get('last_error') }));
+if (platform === 'darwin') {
+  await rm(plan.remotePlist, { force: true });
+  await rm(plan.watchdogPlist, { force: true });
+  await rm(plan.stateDir, { recursive: true, force: true });
+}
+await rm(plan.baseDir, { recursive: true, force: true });
+console.log('RDC Persistente uninstalled. Desktop Commander account data outside this package was preserved.');
