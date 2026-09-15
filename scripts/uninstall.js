@@ -10,6 +10,7 @@ const platform = process.platform;
 if (!['darwin', 'win32'].includes(platform)) throw new Error(`Unsupported platform: ${platform}`);
 const home = process.env.HOME || process.env.USERPROFILE || homedir();
 const plan = buildInstallPlan({ platform, home, localAppData: process.env.LOCALAPPDATA });
+const servicesOnly = process.argv.includes('--services-only');
 const lifecycle = platform === 'darwin'
   ? buildMacOSLifecycle({ uid: process.getuid(), plan })
   : buildWindowsLifecycle({ nodePath: process.execPath, appDir: plan.appDir });
@@ -17,10 +18,12 @@ const lifecycle = platform === 'darwin'
 for (const [file, ...args] of lifecycle.uninstall) {
   try { execFileSync(file, args, { stdio: 'ignore', windowsHide: true }); } catch {}
 }
-if (platform === 'darwin') {
-  await rm(plan.remotePlist, { force: true });
-  await rm(plan.watchdogPlist, { force: true });
-  await rm(plan.stateDir, { recursive: true, force: true });
+if (!servicesOnly) {
+  if (platform === 'darwin') {
+    await rm(plan.remotePlist, { force: true });
+    await rm(plan.watchdogPlist, { force: true });
+    await rm(plan.stateDir, { recursive: true, force: true });
+  }
+  await rm(plan.baseDir, { recursive: true, force: true });
 }
-await rm(plan.baseDir, { recursive: true, force: true });
-console.log('RDC Persistente uninstalled. Desktop Commander account data outside this package was preserved.');
+console.log(servicesOnly ? 'Persistence services removed.' : 'RDC Persistente uninstalled; external account data preserved.');
