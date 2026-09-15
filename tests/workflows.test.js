@@ -20,6 +20,7 @@ test('release builds four native platform architectures and publishes checksums'
   assert.match(release, /SHA256SUMS/);
   assert.match(release, /choco pack/);
   assert.match(release, /gh release/);
+  assert.match(release, /--repo \"\$GITHUB_REPOSITORY\"/);
 });
 
 test('release supports non-publishing manual preflight', async () => {
