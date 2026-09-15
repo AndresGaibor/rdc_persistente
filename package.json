@@ -1,20 +1,20 @@
 {
-  "name": "rdc-persistente-macos",
-  "version": "0.1.0",
-  "description": "Supervisor persistente para Desktop Commander Remote en macOS usando Node.js y launchd.",
+  "name": "rdc-persistente",
+  "version": "0.2.0",
+  "description": "Supervisor persistente para Desktop Commander Remote en macOS y Windows.",
   "type": "module",
   "engines": { "node": ">=22" },
   "scripts": {
     "test": "node --test",
-    "check": "node --check src/*.js && node --check bin/*.js && node --check scripts/*.js",
+    "check": "node scripts/check.js",
     "stage": "node scripts/install.js",
     "install:local": "node scripts/install.js --activate",
-    "status": "node scripts/status.js"
+    "uninstall:local": "node scripts/uninstall.js",
+    "status": "node scripts/status.js",
+    "dist": "node scripts/build-dist.js",
+    "dist:choco": "node scripts/build-chocolatey.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/AndresGaibor/rdc_persistente.git"
-  },
-  "keywords": ["desktop-commander", "rdc", "macos", "launchd", "watchdog"],
+  "repository": { "type": "git", "url": "git+https://github.com/AndresGaibor/rdc_persistente.git" },
+  "keywords": ["desktop-commander", "rdc", "macos", "windows", "launchd", "task-scheduler", "watchdog"],
   "license": "MIT"
 }

@@ -1,17 +1,23 @@
 import path from 'node:path';
+import { buildPlatformPaths } from './platform/paths.js';
 
-export function buildInstallPlan(home) {
-  const appDir = path.join(home, '.local/share/rdc-macos-supervisor/app');
-  const runtimeDir = path.join(home, '.local/share/rdc-macos-supervisor/runtime');
-  const stateDir = path.join(home, '.local/state/rdc-macos-supervisor');
-  const launchAgentsDir = path.join(home, 'Library/LaunchAgents');
+export function buildInstallPlan(input) {
+  const options = typeof input === 'string'
+    ? { platform: 'darwin', home: input }
+    : input;
+  const paths = buildPlatformPaths(options);
+
+  if (options.platform === 'darwin') {
+    return {
+      ...paths,
+      remotePlist: path.posix.join(paths.launchAgentsDir, 'dev.rdc.macos-supervisor.remote.plist'),
+      watchdogPlist: path.posix.join(paths.launchAgentsDir, 'dev.rdc.macos-supervisor.watchdog.plist'),
+      labels: ['dev.rdc.macos-supervisor.remote', 'dev.rdc.macos-supervisor.watchdog']
+    };
+  }
+
   return {
-    appDir,
-    runtimeDir,
-    stateDir,
-    launchAgentsDir,
-    remotePlist: path.join(launchAgentsDir, 'dev.rdc.macos-supervisor.remote.plist'),
-    watchdogPlist: path.join(launchAgentsDir, 'dev.rdc.macos-supervisor.watchdog.plist'),
-    labels: ['dev.rdc.macos-supervisor.remote', 'dev.rdc.macos-supervisor.watchdog']
+    ...paths,
+    taskNames: ['RdcPersistente\\Remote', 'RdcPersistente\\Watchdog']
   };
 }
