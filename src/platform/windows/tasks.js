@@ -12,6 +12,7 @@ function task(name, scheduleArgs, command) {
     createArgs: ['/Create', '/F', '/TN', name, ...scheduleArgs, '/TR', command, '/IT', '/RL', 'LIMITED'],
     runArgs: ['/Run', '/TN', name],
     queryArgs: ['/Query', '/TN', name, '/FO', 'LIST', '/V'],
+    endArgs: ['/End', '/TN', name],
     deleteArgs: ['/Delete', '/F', '/TN', name]
   };
 }

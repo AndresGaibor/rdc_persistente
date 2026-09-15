@@ -40,3 +40,17 @@ test('PowerShell uninstall and status reuse installed bundled node', async () =>
   assert.match(uninstall, /--services-only/);
   assert.match(status, /node\\node\.exe/);
 });
+
+test('PowerShell installer requires elevation before creating scheduled tasks', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const install = await readFile(new URL('../install.ps1', import.meta.url), 'utf8');
+  assert.match(install, /WindowsBuiltInRole.*Administrator/s);
+  assert.match(install, /Run PowerShell as Administrator/);
+});
+test('PowerShell reinstall stops old persistence before replacing files', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const script = await readFile(new URL('../install.ps1', import.meta.url), 'utf8');
+  assert.match(script, /scripts\\uninstall\.js/);
+  assert.match(script, /--services-only/);
+  assert.ok(script.indexOf('--services-only') < script.indexOf('Remove-Item $destination'));
+});

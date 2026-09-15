@@ -11,6 +11,11 @@ export function buildWindowsLifecycle({ nodePath, appDir }) {
       ['schtasks.exe', ...tasks.watchdog.runArgs]
     ],
     status: all.map((task) => ['schtasks.exe', ...task.queryArgs]),
-    uninstall: all.map((task) => ['schtasks.exe', ...task.deleteArgs])
+    uninstall: [
+      ['schtasks.exe', ...tasks.watchdog.endArgs],
+      ['schtasks.exe', ...tasks.remote.endArgs],
+      ['schtasks.exe', ...tasks.watchdog.deleteArgs],
+      ['schtasks.exe', ...tasks.remote.deleteArgs]
+    ]
   };
 }

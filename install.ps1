@@ -4,6 +4,11 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
+$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+  throw "RDC Persistente requires elevation. Run PowerShell as Administrator to register scheduled tasks."
+}
+
 $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
   "AMD64" { "x64" }
   "ARM64" { "arm64" }
@@ -17,17 +22,25 @@ $zip = Join-Path $temp $asset
 $sums = Join-Path $temp "SHA256SUMS"
 $extract = Join-Path $temp "extract"
 $destination = Join-Path $env:LOCALAPPDATA "RdcPersistente"
-
 New-Item -ItemType Directory -Path $temp, $extract -Force | Out-Null
 try {
   Invoke-WebRequest -UseBasicParsing "$base/$asset" -OutFile $zip
   Invoke-WebRequest -UseBasicParsing "$base/SHA256SUMS" -OutFile $sums
   $line = Get-Content $sums | Where-Object { $_ -match [regex]::Escape($asset) } | Select-Object -First 1
   if (-not $line) { throw "Checksum not found for $asset" }
+
   $expected = ($line -split '\s+')[0].ToLowerInvariant()
-  $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()  if ($actual -ne $expected) { throw "SHA-256 mismatch for $asset" }
+  $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+  if ($actual -ne $expected) { throw "SHA-256 mismatch for $asset" }
 
   Expand-Archive -Path $zip -DestinationPath $extract -Force
+
+  $oldNode = Join-Path $destination "node\node.exe"
+  $oldUninstaller = Join-Path $destination "source\scripts\uninstall.js"
+  if ((Test-Path $oldNode) -and (Test-Path $oldUninstaller)) {
+    & $oldNode $oldUninstaller --services-only
+    Start-Sleep -Milliseconds 750
+  }
   if (Test-Path $destination) { Remove-Item $destination -Recurse -Force }
   New-Item -ItemType Directory -Path $destination -Force | Out-Null
   Copy-Item (Join-Path $extract '*') $destination -Recurse -Force
@@ -36,10 +49,13 @@ try {
   $installer = Join-Path $destination "source\scripts\install.js"
   if (-not (Test-Path $node)) { throw "Bundled Node runtime not found: $node" }
   if (-not (Test-Path $installer)) { throw "Installer entrypoint not found: $installer" }
+
   & $node $installer --activate
   if ($LASTEXITCODE -ne 0) { throw "RDC Persistente installer failed with exit code $LASTEXITCODE" }
   Write-Host "RDC Persistente installed in $destination"
 }
 finally {
-  if (Test-Path $temp) { Remove-Item $temp -Recurse -Force -ErrorAction SilentlyContinue }
+  if (Test-Path $temp) {
+    Remove-Item $temp -Recurse -Force -ErrorAction SilentlyContinue
+  }
 }
