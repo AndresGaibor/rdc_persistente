@@ -21,3 +21,9 @@ test('release builds four native platform architectures and publishes checksums'
   assert.match(release, /choco pack/);
   assert.match(release, /gh release/);
 });
+
+test('release supports non-publishing manual preflight', async () => {
+  const release = await read('.github/workflows/release.yml');
+  assert.match(release, /workflow_dispatch:/);
+  assert.match(release, /if:\s*startsWith\(github\.ref, 'refs\/tags\/v'\)/);
+});

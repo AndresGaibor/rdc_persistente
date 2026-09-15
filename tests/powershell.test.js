@@ -54,3 +54,11 @@ test('PowerShell reinstall stops old persistence before replacing files', async 
   assert.match(script, /--services-only/);
   assert.ok(script.indexOf('--services-only') < script.indexOf('Remove-Item $destination'));
 });
+
+test('PowerShell uninstall evaluates both paths correctly and waits before deletion', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const script = await readFile(new URL('../uninstall.ps1', import.meta.url), 'utf8');
+  assert.match(script, /\(Test-Path \$node\) -and \(Test-Path \$uninstaller\)/);
+  assert.match(script, /Start-Sleep -Milliseconds/);
+  assert.doesNotMatch(script, /Test-Path \$node -and Test-Path/);
+});
