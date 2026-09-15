@@ -32,8 +32,8 @@ jobs:
             asset: rdc-persistente-macos-x64.tar.gz
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24.21.0
           cache: npm
@@ -42,7 +42,7 @@ jobs:
       - run: npm run check
       - name: Build self-contained artifact
         run: node scripts/build-dist.js --platform=${{ matrix.platform }} --arch=${{ matrix.arch }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.platform }}-${{ matrix.arch }}
           path: dist/${{ matrix.asset }}
@@ -51,8 +51,8 @@ jobs:
   chocolatey:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24.21.0
           cache: npm
@@ -63,7 +63,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path dist\chocolatey\package -Force | Out-Null
           choco pack dist\chocolatey\source\rdc-persistente.nuspec --outputdirectory dist\chocolatey\package
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-chocolatey
           path: dist/chocolatey/package/*.nupkg
@@ -73,7 +73,7 @@ jobs:
     needs: [build, chocolatey]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: release-*
           path: release-assets
